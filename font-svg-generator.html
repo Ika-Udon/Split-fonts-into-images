@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>フォントSVG生成ツール</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/opentype.js/1.3.4/opentype.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            backdrop-filter: blur(10px);
+        }
+        
+        h1 {
+            text-align: center;
+            color: #4a5568;
+            margin-bottom: 30px;
+            font-size: 2.5rem;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .form-group {
+            margin-bottom: 25px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #4a5568;
+        }
+        
+        input[type="file"], textarea, input[type="number"], input[type="text"] {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: all 0.3s ease;
+            box-sizing: border-box;
+        }
+        
+        input[type="file"]:focus, textarea:focus, input[type="number"]:focus, input[type="text"]:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
+        textarea {
+            height: 120px;
+            resize: vertical;
+            font-family: inherit;
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 15px;
+            margin-top: 30px;
+        }
+        
+        button {
+            flex: 1;
+            padding: 15px 30px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .generate-btn {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+        }
+        
+        .generate-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+        
+        .generate-btn:disabled {
+            background: #cbd5e0;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        
+        .preview-btn {
+            background: linear-gradient(45deg, #48bb78, #38a169);
+            color: white;
+        }
+        
+        .preview-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(72, 187, 120, 0.3);
+        }
+        
+        .preview-section {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f7fafc;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+        }
+        
+        .preview-section h3 {
+            margin-top: 0;
+            color: #4a5568;
+        }
+        
+        .status {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 8px;
+            font-weight: 500;
+            text-align: center;
+        }
+        
+        .status.success {
+            background: #c6f6d5;
+            color: #22543d;
+            border: 1px solid #9ae6b4;
+        }
+        
+        .status.error {
+            background: #fed7d7;
+            color: #742a2a;
+            border: 1px solid #fc8181;
+        }
+        
+        .status.info {
+            background: #bee3f8;
+            color: #2a4365;
+            border: 1px solid #90cdf4;
+        }
+        
+        .settings-row {
+            display: flex;
+            gap: 20px;
+        }
+        
+        .settings-row .form-group {
+            flex: 1;
+        }
+        
+        @media (max-width: 600px) {
+            .settings-row {
+                flex-direction: column;
+            }
+            
+            .button-group {
+                flex-direction: column;
+            }
+            
+            .precision-labels {
+                flex-direction: column;
+                text-align: center;
+                gap: 5px;
+            }
+        }
+        
+        .precision-labels {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 8px;
+            font-size: 12px;
+            color: #666;
+        }
+        
+        .precision-left {
+            color: #48bb78;
+            font-weight: 600;
+        }
+        
+        .precision-right {
+            color: #764ba2;
+            font-weight: 600;
+        }
+        
+        .precision-center {
+            background: #f7fafc;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-weight: 500;
+            color: #4a5568;
+            border: 1px solid #e2e8f0;
+        }
+        
+        input[type="range"] {
+            -webkit-appearance: none;
+            background: transparent;
+            border-radius: 5px;
+        }
+        
+        input[type="range"]::-webkit-slider-track {
+            background: linear-gradient(to right, #48bb78 0%, #667eea 50%, #764ba2 100%);
+            height: 8px;
+            border-radius: 5px;
+        }
+        
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 20px;
+            width: 20px;
+            border-radius: 50%;
+            background: white;
+            border: 3px solid #667eea;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        
+        input[type="range"]::-moz-range-track {
+            background: linear-gradient(to right, #48bb78 0%, #667eea 50%, #764ba2 100%);
+            height: 8px;
+            border-radius: 5px;
+            border: none;
+        }
+        
+        input[type="range"]::-moz-range-thumb {
+            height: 20px;
+            width: 20px;
+            border-radius: 50%;
+            background: white;
+            border: 3px solid #667eea;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎨 フォントSVG生成ツール</h1>
+        
+        <div class="form-group">
+            <label for="fontFile">フォントファイル (.ttf, .otf, .woff, .woff2)</label>
+            <input type="file" id="fontFile" accept=".ttf,.otf,.woff,.woff2" required>
+        </div>
+        
+        <div class="form-group">
+            <label for="filePrefix">ファイル名の接頭辞</label>
+            <input type="text" id="filePrefix" placeholder="例: icon_, my_logo" value="">
+        </div>
+
+        <div class="form-group">
+            <label for="outputText">出力する文字</label>
+            <textarea id="outputText" placeholder="ここに描画したい文字を入力してください..." required>Hello World!</textarea>
+        </div>
+        
+        <div class="settings-row">
+            <div class="form-group">
+                <label for="fontSize">フォントサイズ (px)</label>
+                <input type="number" id="fontSize" value="48" min="12" max="200">
+            </div>
+            
+            <div class="form-group">
+                <label for="fontColor">フォントカラー</label>
+                <input type="color" id="fontColor" value="#333333" style="height: 50px;">
+            </div>
+        </div>
+        
+        <div class="form-group">
+            <label for="precision">SVG軽量化（座標精度）</label>
+            <input type="range" id="precision" min="0" max="10" value="10" step="1" style="width: 100%; height: 8px; background: linear-gradient(to right, #48bb78 0%, #667eea 50%, #764ba2 100%); border-radius: 5px;">
+            <div class="precision-labels">
+                <span class="precision-left">🪶 より軽量</span>
+                <span class="precision-center" id="precisionValue">小数第10位まで (デフォルト)</span>
+                <span class="precision-right">🎯 より元に近い</span>
+            </div>
+        </div>
+        
+        <div class="button-group">
+            <button class="preview-btn" onclick="previewSVG()">プレビュー</button>
+            <button class="generate-btn" onclick="generateZip()">SVGを生成してZIPダウンロード</button>
+        </div>
+        
+        <div id="preview" class="preview-section" style="display: none;">
+            <h3>プレビュー</h3>
+            <div id="previewContent"></div>
+        </div>
+        
+        <div id="status"></div>
+    </div>
+
+    <script>
+        let loadedFont = null;
+        let fontName = '';
+
+        document.getElementById('fontFile').addEventListener('change', async function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            try {
+                showStatus('フォントを読み込み中...', 'info');
+                
+                const arrayBuffer = await file.arrayBuffer();
+                loadedFont = opentype.parse(arrayBuffer);
+                fontName = loadedFont.names.fontFamily.en || loadedFont.names.fontFamily[Object.keys(loadedFont.names.fontFamily)[0]];
+                
+                showStatus(`フォント "${file.name}" が正常に読み込まれました`, 'success');
+            } catch (error) {
+                showStatus(`フォントの読み込みに失敗しました: ${error.message}`, 'error');
+                loadedFont = null;
+            }
+        });
+
+        // 精度スライダーの値を更新
+        document.getElementById('precision').addEventListener('input', function(e) {
+            const value = parseInt(e.target.value);
+            const precisionValue = document.getElementById('precisionValue');
+            
+            if (value === 0) {
+                precisionValue.textContent = '整数のみ (最軽量)';
+            } else if (value === 10) {
+                precisionValue.textContent = '小数第10位まで (デフォルト)';
+            } else {
+                precisionValue.textContent = `小数第${value}位まで`;
+            }
+        });
+
+        function roundToPrecision(num, precision) {
+            if (precision === 0) {
+                return Math.round(num).toString();
+            }
+            return Number(num.toFixed(precision)).toString();
+        }
+
+        function showStatus(message, type) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = message;
+            statusDiv.className = `status ${type}`;
+            statusDiv.style.display = 'block';
+            
+            if (type === 'success' || type === 'info') {
+                setTimeout(() => {
+                    statusDiv.style.display = 'none';
+                }, 3000);
+            }
+        }
+
+        function createSVGForSingleChar(char, fontSize, color, precision = 10) {
+            if (!loadedFont) {
+                throw new Error('フォントが読み込まれていません');
+            }
+
+            const scale = fontSize / loadedFont.unitsPerEm;
+            const glyph = loadedFont.charToGlyph(char);
+            
+            if (!glyph || !glyph.path || !glyph.path.commands) {
+                return null;
+            }
+
+            // フォントメトリクスを取得
+            const ascender = (loadedFont.ascender || 0) * scale;
+            const descender = (loadedFont.descender || 0) * scale;
+            const lineHeight = ascender - descender;
+
+            // グリフの実際の境界ボックスを取得
+            const bbox = glyph.getBoundingBox();
+            const glyphMinX = bbox.x1 * scale;
+            const glyphMaxX = bbox.x2 * scale;
+            const glyphMinY = bbox.y1 * scale;
+            const glyphMaxY = bbox.y2 * scale;
+
+            const actualWidth = glyphMaxX - glyphMinX;
+            const actualHeight = glyphMaxY - glyphMinY;
+
+            const margin = 2;
+            const baselineY = ascender + margin;
+            const startX = -glyphMinX + margin;
+
+            const svgWidth = Math.max(actualWidth, fontSize * 0.3) + margin * 2;
+            const svgHeight = lineHeight + margin * 2;
+
+            let pathString = '';
+            
+            // パスコマンドをSVGパスに変換（精度調整付き）
+            for (const cmd of glyph.path.commands) {
+                switch (cmd.type) {
+                    case 'M':
+                        const mx = roundToPrecision(cmd.x * scale + startX, precision);
+                        const my = roundToPrecision(baselineY - cmd.y * scale, precision);
+                        pathString += `M${mx},${my}`;
+                        break;
+                    case 'L':
+                        const lx = roundToPrecision(cmd.x * scale + startX, precision);
+                        const ly = roundToPrecision(baselineY - cmd.y * scale, precision);
+                        pathString += `L${lx},${ly}`;
+                        break;
+                    case 'C':
+                        const cx1 = roundToPrecision(cmd.x1 * scale + startX, precision);
+                        const cy1 = roundToPrecision(baselineY - cmd.y1 * scale, precision);
+                        const cx2 = roundToPrecision(cmd.x2 * scale + startX, precision);
+                        const cy2 = roundToPrecision(baselineY - cmd.y2 * scale, precision);
+                        const cx = roundToPrecision(cmd.x * scale + startX, precision);
+                        const cy = roundToPrecision(baselineY - cmd.y * scale, precision);
+                        pathString += `C${cx1},${cy1} ${cx2},${cy2} ${cx},${cy}`;
+                        break;
+                    case 'Q':
+                        const qx1 = roundToPrecision(cmd.x1 * scale + startX, precision);
+                        const qy1 = roundToPrecision(baselineY - cmd.y1 * scale, precision);
+                        const qx = roundToPrecision(cmd.x * scale + startX, precision);
+                        const qy = roundToPrecision(baselineY - cmd.y * scale, precision);
+                        pathString += `Q${qx1},${qy1} ${qx},${qy}`;
+                        break;
+                    case 'Z':
+                        pathString += 'Z';
+                        break;
+                }
+            }
+
+            if (!pathString || pathString === 'Z') {
+                return null;
+            }
+
+            // SVGサイズも精度調整
+            const finalWidth = roundToPrecision(svgWidth, precision);
+            const finalHeight = roundToPrecision(svgHeight, precision);
+
+            const svgContent = `<?xml version="1.0" encoding="UTF-8"?>
+<svg width="${finalWidth}" height="${finalHeight}" viewBox="0 0 ${finalWidth} ${finalHeight}" xmlns="http://www.w3.org/2000/svg">
+  <path d="${pathString}" fill="${color}" fill-rule="evenodd"/>
+</svg>`;
+
+            return svgContent;
+        }
+
+        function createSVGFromPathsAdvanced(text, fontSize, color) {
+            if (!loadedFont) {
+                throw new Error('フォントが読み込まれていません');
+            }
+
+            const scale = fontSize / loadedFont.unitsPerEm;
+            let currentX = 20;
+            const baselineY = fontSize + 20;
+            const pathElements = [];
+
+            // カーニング情報を考慮して文字を配置
+            for (let i = 0; i < text.length; i++) {
+                const char = text[i];
+                
+                // 改行文字の処理
+                if (char === '\n') {
+                    currentX = 20;
+                    baselineY += fontSize * 1.2;
+                    continue;
+                }
+                
+                const glyph = loadedFont.charToGlyph(char);
+                
+                if (glyph && glyph.path && glyph.path.commands) {
+                    // パスコマンドを手動でSVGパスに変換
+                    let pathString = '';
+                    
+                    for (const cmd of glyph.path.commands) {
+                        switch (cmd.type) {
+                            case 'M':
+                                pathString += `M${(cmd.x * scale + currentX).toFixed(2)},${(baselineY - cmd.y * scale).toFixed(2)}`;
+                                break;
+                            case 'L':
+                                pathString += `L${(cmd.x * scale + currentX).toFixed(2)},${(baselineY - cmd.y * scale).toFixed(2)}`;
+                                break;
+                            case 'C':
+                                pathString += `C${(cmd.x1 * scale + currentX).toFixed(2)},${(baselineY - cmd.y1 * scale).toFixed(2)} ${(cmd.x2 * scale + currentX).toFixed(2)},${(baselineY - cmd.y2 * scale).toFixed(2)} ${(cmd.x * scale + currentX).toFixed(2)},${(baselineY - cmd.y * scale).toFixed(2)}`;
+                                break;
+                            case 'Q':
+                                pathString += `Q${(cmd.x1 * scale + currentX).toFixed(2)},${(baselineY - cmd.y1 * scale).toFixed(2)} ${(cmd.x * scale + currentX).toFixed(2)},${(baselineY - cmd.y * scale).toFixed(2)}`;
+                                break;
+                            case 'Z':
+                                pathString += 'Z';
+                                break;
+                        }
+                    }
+                    
+                    if (pathString && pathString !== 'Z') {
+                        pathElements.push(`<path d="${pathString}" fill="${color}" fill-rule="evenodd"/>`);
+                    }
+                }
+                
+                // 次の文字の位置を計算（カーニングを考慮）
+                const advanceWidth = (glyph.advanceWidth || 0) * scale;
+                const nextChar = text[i + 1];
+                let kerning = 0;
+                
+                if (nextChar && loadedFont.getKerningValue) {
+                    kerning = loadedFont.getKerningValue(glyph, loadedFont.charToGlyph(nextChar)) * scale;
+                }
+                
+                currentX += advanceWidth + kerning;
+            }
+
+            // SVGの全体サイズを計算
+            const svgWidth = Math.max(currentX + 20, 200);
+            const svgHeight = baselineY + fontSize * 0.3 + 20;
+
+            // SVGを構築
+            const svgContent = `<?xml version="1.0" encoding="UTF-8"?>
+<svg width="${svgWidth}" height="${svgHeight}" viewBox="0 0 ${svgWidth} ${svgHeight}" xmlns="http://www.w3.org/2000/svg">
+  <rect width="100%" height="100%" fill="white"/>
+  <g>
+    ${pathElements.join('\n    ')}
+  </g>
+</svg>`;
+
+            return svgContent;
+        }
+
+        function previewSVG() {
+            try {
+                const text = document.getElementById('outputText').value.trim();
+                const fontSize = parseInt(document.getElementById('fontSize').value);
+                const color = document.getElementById('fontColor').value;
+                const precision = parseInt(document.getElementById('precision').value);
+                
+                if (!text) {
+                    showStatus('出力する文字を入力してください', 'error');
+                    return;
+                }
+                
+                if (!loadedFont) {
+                    showStatus('フォントファイルを選択してください', 'error');
+                    return;
+                }
+
+                const previewDiv = document.getElementById('preview');
+                const previewContent = document.getElementById('previewContent');
+                
+                // プレビュー用に最初の数文字のSVGを生成
+                const previewText = text.slice(0, 10); // 最初の10文字まで
+                let previewHtml = '<div style="display: flex; flex-wrap: wrap; gap: 10px;">';
+                let totalSize = 0; // ファイルサイズの概算計算用
+                
+                for (let i = 0; i < previewText.length; i++) {
+                    const char = previewText[i];
+                    
+                    if (char === '\n' || char === '\r' || char === '\t') {
+                        continue;
+                    }
+                    
+                    if (char === ' ') {
+                        previewHtml += '<div style="border: 1px dashed #ccc; padding: 5px; min-width: 15px; height: 40px; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #666;">SP</div>';
+                        continue;
+                    }
+                    
+                    try {
+                        const svgContent = createSVGForSingleChar(char, fontSize, color, precision);
+                        if (svgContent) {
+                            totalSize += svgContent.length;
+                            const codePoint = char.codePointAt(0);
+                            const unicodeHex = codePoint.toString(16).toUpperCase().padStart(4, '0');
+                            const fileSizeKB = (svgContent.length / 1024).toFixed(2);
+                            
+                            previewHtml += `
+                                <div style="border: 1px solid #ddd; padding: 5px; text-align: center;">
+                                    <div style="margin-bottom: 3px;">${svgContent}</div>
+                                    <div style="font-size: 9px; color: #666;">"${char}"<br>U+${unicodeHex}<br>${fileSizeKB}KB</div>
+                                </div>
+                            `;
+                        }
+                    } catch (error) {
+                        console.warn(`文字 "${char}" のプレビュー生成エラー:`, error);
+                        previewHtml += `
+                            <div style="border: 1px solid #f00; padding: 5px; text-align: center; color: red;">
+                                <div style="font-size: 10px;">エラー</div>
+                                <div style="font-size: 8px;">"${char}"</div>
+                            </div>
+                        `;
+                    }
+                }
+                
+                previewHtml += '</div>';
+                
+                // サイズ情報を表示
+                const avgSize = totalSize / Math.max(previewText.replace(/[\n\r\t ]/g, '').length, 1);
+                const estimatedTotal = avgSize * text.replace(/[\n\r\t ]/g, '').length;
+                
+                if (text.length > 10) {
+                    previewHtml += `<div style="margin-top: 15px; padding: 10px; background: #f0f8ff; border-radius: 5px; font-size: 14px; color: #2c5aa0;">
+                        <strong>📊 サイズ情報</strong><br>
+                        プレビュー中の文字: 平均 ${(avgSize / 1024).toFixed(2)}KB/文字<br>
+                        全体推定サイズ: 約 ${(estimatedTotal / 1024).toFixed(2)}KB<br>
+                        精度設定: ${precision === 0 ? '整数のみ (最軽量)' : precision === 10 ? '小数第10位 (デフォルト)' : `小数第${precision}位`}<br>
+                        ※ 最初の10文字のプレビューを表示中 (全${text.length}文字が生成対象)
+                    </div>`;
+                } else {
+                    previewHtml += `<div style="margin-top: 15px; padding: 10px; background: #f0f8ff; border-radius: 5px; font-size: 14px; color: #2c5aa0;">
+                        <strong>📊 サイズ情報</strong><br>
+                        総サイズ: ${(totalSize / 1024).toFixed(2)}KB<br>
+                        平均: ${(avgSize / 1024).toFixed(2)}KB/文字<br>
+                        精度設定: ${precision === 0 ? '整数のみ (最軽量)' : precision === 10 ? '小数第10位 (デフォルト)' : `小数第${precision}位`}
+                    </div>`;
+                }
+                
+                previewContent.innerHTML = previewHtml;
+                previewDiv.style.display = 'block';
+                
+                showStatus('文字別プレビューを生成しました（パスベース）', 'success');
+                
+            } catch (error) {
+                showStatus(`プレビューの生成に失敗しました: ${error.message}`, 'error');
+                console.error('Preview error:', error);
+            }
+        }
+
+        async function generateZip() {
+            try {
+                const text = document.getElementById('outputText').value.trim();
+                const filePrefix = document.getElementById('filePrefix').value.trim();
+                const fontSize = parseInt(document.getElementById('fontSize').value);
+                const color = document.getElementById('fontColor').value;
+                const precision = parseInt(document.getElementById('precision').value);
+
+                if (!text) {
+                    showStatus('出力する文字を入力してください', 'error');
+                    return;
+                }
+                
+                if (!loadedFont) {
+                    showStatus('フォントファイルを選択してください', 'error');
+                    return;
+                }
+
+                showStatus('文字ごとのSVG（パスベース）を生成中...', 'info');
+
+                const zip = new JSZip();
+                let fileCount = 0;
+                const charCounts = {}; // 重複文字のカウント用
+                
+                // 文字を一文字ずつ処理
+                for (let i = 0; i < text.length; i++) {
+                    const char = text[i];
+                    
+                    // 制御文字（改行、タブ、空白など）をスキップ
+                    if (char === '\n' || char === '\r' || char === '\t') {
+                        continue;
+                    }
+                    
+                    try {
+                        const svgContent = createSVGForSingleChar(char, fontSize, color, precision);
+                        
+                        if (svgContent) {
+                            // 安全なファイル名を作成
+                            // 禁止文字をアンダースコアに置換し、URIエンコードも使用しない
+                            let safeName = char.replace(/[\/\\?%*:|"<>]/g, '_');
+                            // 重複文字のカウント
+                            charCounts[safeName] = (charCounts[safeName] || 0) + 1;
+                            
+                            // ファイル名の構成: 接頭辞 + 安全な文字 + 重複連番 + 拡張子
+                            const countSuffix = charCounts[safeName] > 1 ? `_${charCounts[safeName]}` : '';
+                            const fileName = `${filePrefix}${safeName}${countSuffix}.svg`;
+                            zip.file(fileName, svgContent);
+                            fileCount++;
+                        }
+                    } catch (charError) {
+                        console.warn(`文字 "${char}" の処理中にエラー:`, charError);
+                        // エラーが発生した文字も記録
+                        const codePoint = char.codePointAt(0);
+                        const unicodeHex = codePoint.toString(16).toUpperCase().padStart(4, '0');
+                        
+                        // フォントメトリクスに基づいたエラーSVG
+                        const scale = fontSize / loadedFont.unitsPerEm;
+                        const ascender = (loadedFont.ascender || 0) * scale;
+                        const descender = (loadedFont.descender || 0) * scale;
+                        const lineHeight = ascender - descender;
+                        const margin = 2;
+                        const errorWidth = fontSize;
+                        
+                        const errorSvg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg width="${(errorWidth + margin * 2).toFixed(2)}" height="${(lineHeight + margin * 2).toFixed(2)}" viewBox="0 0 ${(errorWidth + margin * 2).toFixed(2)} ${(lineHeight + margin * 2).toFixed(2)}" xmlns="http://www.w3.org/2000/svg">
+  <!-- エラー文字: "${char}" U+${unicodeHex} -->
+  <rect x="${margin}" y="${margin}" width="${errorWidth}" height="${lineHeight}" fill="none" stroke="red" stroke-width="1"/>
+  <path d="M${margin + errorWidth * 0.2},${margin + lineHeight * 0.8} L${margin + errorWidth * 0.8},${margin + lineHeight * 0.2} M${margin + errorWidth * 0.2},${margin + lineHeight * 0.2} L${margin + errorWidth * 0.8},${margin + lineHeight * 0.8}" stroke="red" stroke-width="1"/>
+</svg>`;
+                        
+                        charCounts['error'] = (charCounts['error'] || 0) + 1;
+                        const fileName = `${filePrefix}ERROR_${charCounts['error']}_U${unicodeHex}.svg`;
+                        zip.file(fileName, errorSvg);
+                        fileCount++;
+                    }
+                }
+
+                if (fileCount === 0) {
+                    showStatus('生成可能な文字が見つかりませんでした', 'error');
+                    return;
+                }
+
+                // ZIPファイルを生成してダウンロード
+                const zipBlob = await zip.generateAsync({ type: 'blob' });
+                const url = URL.createObjectURL(zipBlob);
+                
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `font_svg_chars_${new Date().getTime()}.zip`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                
+                URL.revokeObjectURL(url);
+                
+                showStatus(`${fileCount}個の文字別SVGファイルのZIPダウンロードが完了しました`, 'success');
+                
+            } catch (error) {
+                showStatus(`ZIPファイルの生成に失敗しました: ${error.message}`, 'error');
+                console.error('ZIP generation error:', error);
+            }
+        }
+    </script>
+</body>
+</html>
