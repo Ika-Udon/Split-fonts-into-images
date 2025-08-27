@@ -363,13 +363,14 @@
                 throw new Error('フォントが読み込まれていません');
             }
 
-            const scale = fontSize / loadedFont.unitsPerEm;
+            // check if glyph exists
             const glyph = loadedFont.charToGlyph(char);
-            
-            if (!glyph || !glyph.path || !glyph.path.commands) {
+            if (!glyph || !glyph.path || !glyph.path.commands || glyph.index === 0) {
                 return null;
             }
 
+            const scale = fontSize / loadedFont.unitsPerEm;
+            
             // フォントメトリクスを取得
             const ascender = (loadedFont.ascender || 0) * scale;
             const descender = (loadedFont.descender || 0) * scale;
@@ -576,6 +577,9 @@
                                     <div style="font-size: 9px; color: #666;">"${char}"<br>U+${unicodeHex}<br>${fileSizeKB}KB</div>
                                 </div>
                             `;
+                        } else {
+                            // 文字が見つからない場合、スキップ
+                            continue;
                         }
                     } catch (error) {
                         console.warn(`文字 "${char}" のプレビュー生成エラー:`, error);
@@ -645,7 +649,8 @@
                 const zip = new JSZip();
                 let fileCount = 0;
                 const charCounts = {}; // 重複文字のカウント用
-                
+                const skippedChars = []; // スキップされた文字を追跡
+
                 // 文字を一文字ずつ処理
                 for (let i = 0; i < text.length; i++) {
                     const char = text[i];
@@ -670,32 +675,14 @@
                             const fileName = `${filePrefix}${safeName}${countSuffix}.svg`;
                             zip.file(fileName, svgContent);
                             fileCount++;
+                        } else {
+                            // 文字のグリフが存在しない場合、スキップして記録
+                            skippedChars.push(char);
                         }
                     } catch (charError) {
                         console.warn(`文字 "${char}" の処理中にエラー:`, charError);
-                        // エラーが発生した文字も記録
-                        const codePoint = char.codePointAt(0);
-                        const unicodeHex = codePoint.toString(16).toUpperCase().padStart(4, '0');
-                        
-                        // フォントメトリクスに基づいたエラーSVG
-                        const scale = fontSize / loadedFont.unitsPerEm;
-                        const ascender = (loadedFont.ascender || 0) * scale;
-                        const descender = (loadedFont.descender || 0) * scale;
-                        const lineHeight = ascender - descender;
-                        const margin = 2;
-                        const errorWidth = fontSize;
-                        
-                        const errorSvg = `<?xml version="1.0" encoding="UTF-8"?>
-<svg width="${(errorWidth + margin * 2).toFixed(2)}" height="${(lineHeight + margin * 2).toFixed(2)}" viewBox="0 0 ${(errorWidth + margin * 2).toFixed(2)} ${(lineHeight + margin * 2).toFixed(2)}" xmlns="http://www.w3.org/2000/svg">
-  <!-- エラー文字: "${char}" U+${unicodeHex} -->
-  <rect x="${margin}" y="${margin}" width="${errorWidth}" height="${lineHeight}" fill="none" stroke="red" stroke-width="1"/>
-  <path d="M${margin + errorWidth * 0.2},${margin + lineHeight * 0.8} L${margin + errorWidth * 0.8},${margin + lineHeight * 0.2} M${margin + errorWidth * 0.2},${margin + lineHeight * 0.2} L${margin + errorWidth * 0.8},${margin + lineHeight * 0.8}" stroke="red" stroke-width="1"/>
-</svg>`;
-                        
-                        charCounts['error'] = (charCounts['error'] || 0) + 1;
-                        const fileName = `${filePrefix}ERROR_${charCounts['error']}_U${unicodeHex}.svg`;
-                        zip.file(fileName, errorSvg);
-                        fileCount++;
+                        // エラーが発生した文字はスキップ
+                        skippedChars.push(char);
                     }
                 }
 
@@ -717,7 +704,11 @@
                 
                 URL.revokeObjectURL(url);
                 
-                showStatus(`${fileCount}個の文字別SVGファイルのZIPダウンロードが完了しました`, 'success');
+                let successMessage = `${fileCount}個の文字別SVGファイルのZIPダウンロードが完了しました`;
+                if (skippedChars.length > 0) {
+                    successMessage += ` (${skippedChars.length}個の文字はフォントデータに存在しないためスキップされました)`;
+                }
+                showStatus(successMessage, 'success');
                 
             } catch (error) {
                 showStatus(`ZIPファイルの生成に失敗しました: ${error.message}`, 'error');
